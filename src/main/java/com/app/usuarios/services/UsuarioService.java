@@ -64,7 +64,8 @@ public class UsuarioService implements IUsuarioService {
 			uDb.setEconomicData(usuario.getEconomicData());
 		if (usuario.getInterests() != null) {
 			uDb.setInterests(usuario.getInterests());
-			if (cbFactory.create("usuario").run(() -> rmdClient.editUser(usuario.getUsername(), "", usuario.getInterests()),
+			if (cbFactory.create("usuario").run(
+					() -> rmdClient.editUser(usuario.getUsername(), "", usuario.getInterests()),
 					e -> errorConexion(e))) {
 				logger.info("Edicion Notificaciones Correcta");
 			}
@@ -75,8 +76,8 @@ public class UsuarioService implements IUsuarioService {
 			uDb.setLocation(new ArrayList<Double>(Arrays.asList(
 					(new BigDecimal(usuario.getLocation().get(0)).setScale(5, RoundingMode.HALF_UP)).doubleValue(),
 					(new BigDecimal(usuario.getLocation().get(1)).setScale(5, RoundingMode.HALF_UP).doubleValue()))));
-			if (cbFactory.create("usuario").run(() -> rmdClient.editarUbicacion(usuario.getUsername(), uDb.getLocation()),
-					e -> errorConexion(e))) {
+			if (cbFactory.create("usuario").run(
+					() -> rmdClient.editarUbicacion(usuario.getUsername(), uDb.getLocation()), e -> errorConexion(e))) {
 				logger.info("Edicion Registro Correcta");
 			}
 		}
@@ -91,8 +92,9 @@ public class UsuarioService implements IUsuarioService {
 		uf.setName(f.getName());
 		uf.setCreatedtime(new Date());
 		uf.setContent(f.getContent());
-		uf.setContenttype(f.getContenttype());
+		uf.setContentType(f.getContentType());
 		uf.setSize(f.getSize());
+		uf.setSuffix("");
 		return uf;
 	}
 
@@ -140,30 +142,33 @@ public class UsuarioService implements IUsuarioService {
 		roles.add(mod);
 		roles.add(intrvnt);
 		roles.add(user);
-		UsuarioPw uPw = new UsuarioPw(username, password, true, 0, 0, roles);
+		UsuarioPw uPw = new UsuarioPw(username, passwordEncoder().encode(password), true, 0, 0, roles);
 		return uPw;
 	}
 
 	@Override
 	public UsuarioFiles ponerImagen(String username, MultipartFile file) {
-		UsuarioFiles uploadFile = new UsuarioFiles();
+		UsuarioFiles uf = new UsuarioFiles();
 		if (ufRepository.existsByUsername(username)) {
-			uploadFile = ufRepository.findByUsername(username);
+			uf = ufRepository.findByUsername(username);
 		} else {
-			uploadFile.setUsername(username);
+			uf.setUsername(username);
 		}
 		try {
 			String fileName = file.getOriginalFilename();
-			uploadFile.setName(fileName);
-			uploadFile.setCreatedtime(new Date());
-			uploadFile.setContent(new Binary(file.getBytes()));
-			uploadFile.setContenttype(file.getContentType());
-			uploadFile.setSize(file.getSize());
-			return uploadFile;
+			uf.setName(fileName);
+			uf.setCreatedtime(new Date());
+			uf.setContent(new Binary(file.getBytes()));
+			uf.setContentType(file.getContentType());
+			uf.setSize(file.getSize());
+			String suffix = file.getOriginalFilename().substring(file.getOriginalFilename().lastIndexOf("."));
+			uf.setSuffix(suffix);
+			return uf;
 		} catch (IOException e) {
 			e.printStackTrace();
 			return null;
 		}
+
 	}
 
 	public Boolean errorConexion(Throwable e) {

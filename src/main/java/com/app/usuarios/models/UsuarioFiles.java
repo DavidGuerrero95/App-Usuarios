@@ -10,9 +10,6 @@ import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.index.Indexed;
 import org.springframework.data.mongodb.core.mapping.Document;
 
-import com.fasterxml.jackson.annotation.JsonProperty;
-import com.fasterxml.jackson.annotation.JsonProperty.Access;
-
 @Document(collection = "usuariosFiles")
 public class UsuarioFiles {
 
@@ -23,31 +20,33 @@ public class UsuarioFiles {
 	@Size(max = 20)
 	@Indexed(unique = true)
 	private String username;
-	
+
 	private String name; // file name
 	private Date createdtime; // upload time
 	private Binary content; // file content
-	private String contenttype; // file type
+	private String contentType; // file type
 	private long size; // file size
+	private String suffix;
 
 	public UsuarioFiles() {
 	}
 
-	public UsuarioFiles(String username, String name, Date createdtime, Binary content, String contenttype, long size) {
+	public UsuarioFiles(@Size(max = 20) String username, String name, Date createdtime, Binary content,
+			String contentType, long size, String suffix) {
 		super();
 		this.username = username;
 		this.name = name;
 		this.createdtime = createdtime;
 		this.content = content;
-		this.contenttype = contenttype;
+		this.contentType = contentType;
 		this.size = size;
+		this.suffix = suffix;
 	}
 
 	public String getId() {
 		return id;
 	}
 
-	@JsonProperty(access = Access.WRITE_ONLY)
 	public void setId(String id) {
 		this.id = id;
 	}
@@ -84,12 +83,12 @@ public class UsuarioFiles {
 		this.content = content;
 	}
 
-	public String getContenttype() {
-		return contenttype;
+	public String getContentType() {
+		return contentType;
 	}
 
-	public void setContenttype(String contenttype) {
-		this.contenttype = contenttype;
+	public void setContentType(String contentType) {
+		this.contentType = contentType;
 	}
 
 	public long getSize() {
@@ -98,6 +97,14 @@ public class UsuarioFiles {
 
 	public void setSize(long size) {
 		this.size = size;
+	}
+
+	public String getSuffix() {
+		return suffix;
+	}
+
+	public void setSuffix(String suffix) {
+		this.suffix = suffix;
 	}
 
 }

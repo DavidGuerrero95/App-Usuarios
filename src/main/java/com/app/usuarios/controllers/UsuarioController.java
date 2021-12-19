@@ -8,6 +8,7 @@ import java.time.Period;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Base64;
 import java.util.Date;
 import java.util.List;
 
@@ -511,6 +512,21 @@ public class UsuarioController {
 		}
 	}
 
+	@GetMapping("/users/file/binary/{username}")
+	@ResponseStatus(HttpStatus.OK)
+	public String binaryToStringFile(@PathVariable("username") String username) {
+		if (ufRepository.existsByUsername(username)) {
+			UsuarioFiles uf = ufRepository.findByUsername(username);
+			byte[] data = null;
+			UsuarioFiles file = ufRepository.findImageById(uf.getId(), UsuarioFiles.class);
+			if (file != null) {
+				data = file.getContent().getData();
+			}
+			return Base64.getEncoder().encodeToString(data);
+		}
+		return "Usuario no encontrado";
+	}
+
 	// Descargar imagen
 	@GetMapping(value = "/users/file/downloadImage/{username}", produces = { MediaType.IMAGE_JPEG_VALUE,
 			MediaType.IMAGE_PNG_VALUE })
@@ -598,7 +614,7 @@ public class UsuarioController {
 		if (!existsByUsername(username)) {
 			Usuario usuario = new Usuario(username, cellPhone, email, cedula, name, lastName, birthDate, gender, phone,
 					economicActivity, economicData, interests, location, headFamily, stakeHolders);
-			UsuarioPw uPw = uService.usuarioPasword(usuario.getUsername(), uService.codificar(password));
+			UsuarioPw uPw = uService.usuarioPasword(usuario.getUsername(), password);
 			UsuarioFiles uploadFile = uService.ponerImagen(usuario.getUsername(), file);
 			uRepository.save(usuario);
 			upRepository.save(uPw);
