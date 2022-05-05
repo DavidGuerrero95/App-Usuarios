@@ -207,6 +207,19 @@ public class UsuarioController {
 			}
 		}
 	}
+	
+	// Peticion para eliminar un usuario
+	@PutMapping("/users/eliminarPeticionAdmin/{username}")
+	@ResponseStatus(code = HttpStatus.OK)
+	public void eliminarPeticionUsuario(@PathVariable("username") String username) {
+		if (existsByUsername(username)) {
+			if (cbFactory.create("usuario").run(() -> iClient.eliminarPeticionUsuarios(username),
+					e -> errorConexion(e))) {
+				logger.info("Eliminacion de peticion lista");
+			}
+		}
+	}
+	
 
 	// Eliminar un usuario
 	@DeleteMapping("/users/eliminar/{username}")
