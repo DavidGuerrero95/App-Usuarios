@@ -24,4 +24,8 @@ public interface NotificacionesFeignClient {
 	@PutMapping("/notificaciones/usuario/editar/{username}")
 	public Boolean editUser(@PathVariable("username") String username, @RequestParam("newUsername") String newUsername,
 			@RequestParam("email") String email);
+	
+	@DeleteMapping("/notificacioneso/eliminar/all/usuarios/")
+	public Boolean eliminarAllUsuario();	
+	
 }

@@ -19,4 +19,7 @@ public interface EstadisticaFeignClient {
 	@PutMapping("/estadistica/usuarios/editar/{username}")
 	public Boolean editUser(@PathVariable("username") String username, @RequestParam("newUsername") String newUsername);
 	
+	@DeleteMapping("/estadistica/eliminar/all/usuarios/")
+	public Boolean eliminarAllUsuario();
+	
 }

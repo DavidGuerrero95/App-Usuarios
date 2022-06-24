@@ -37,5 +37,8 @@ public interface RegistroFeignClient {
 
 	@PutMapping("/registro/editar/codigo/")
 	public void editarUsuario(@RequestParam String username, @RequestParam String codigo, @RequestParam Long minutos);
+	
+	@DeleteMapping("/registro/eliminar/all/usuarios/")
+	public Boolean eliminarAllUsuario();
 
 }

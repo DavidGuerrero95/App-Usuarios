@@ -682,6 +682,7 @@ public class UsuarioController {
 		logger.info(e.getMessage());
 		return false;
 	}
+	
 
 	@PutMapping("/users/arreglar/")
 	public String arreglarUsuarios() throws IOException {
@@ -713,5 +714,29 @@ public class UsuarioController {
 	private List<Registro> errorArreglarReg(Throwable e) {
 		logger.info(e.getMessage());
 		return null;
+	}
+	
+	@DeleteMapping("/users/eliminar/all/usuarios/")
+	@ResponseStatus(code = HttpStatus.ACCEPTED)
+	public void eliminarAllUsuarios() {
+		uRepository.deleteAll();
+		ufRepository.deleteAll();
+		upRepository.deleteAll();
+		if (cbFactory.create("usuario").run(() -> aClient.eliminarAllUsuario(), e -> errorConexion(e))) {
+			logger.info("Eliminacion Todos usuarios, Autenticacion Correcta");
+		}
+		if (cbFactory.create("usuario").run(() -> rClient.eliminarAllUsuario(), e -> errorConexion(e))) {
+			logger.info("Eliminacion Todos usuarios, Registro Correcta");
+		}
+		if (cbFactory.create("usuario").run(() -> rmdClient.eliminarAllUsuario(), e -> errorConexion(e))) {
+			logger.info("Eliminacion Todos usuarios, Recomendacion Correcta");
+		}
+		if (cbFactory.create("usuario").run(() -> nClient.eliminarAllUsuario(), e -> errorConexion(e))) {
+			logger.info("Eliminacion Todos usuarios, Notificacion Correcta");
+		}
+		if (cbFactory.create("usuario").run(() -> eClient.eliminarAllUsuario(),
+				e -> errorConexion(e))) {
+			logger.info("Eliminacion Todos usuarios, Correcta");
+		}
 	}
 }

@@ -1,10 +1,7 @@
 package com.app.usuarios.services;
 
 import java.io.IOException;
-import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Date;
 import java.util.List;
 
@@ -46,22 +43,12 @@ public class UsuarioService implements IUsuarioService {
 
 	@Override
 	public Usuario editUser(Usuario uDb, Usuario usuario) {
-		if (usuario.getUsername() != null)
-			uDb.setUsername(usuario.getUsername());
-		if (usuario.getCellPhone() != null)
-			uDb.setUsername(usuario.getCellPhone());
-		if (usuario.getEmail() != null)
-			uDb.setUsername(usuario.getEmail());
-		if (usuario.getName() != null)
-			uDb.setName(usuario.getName());
-		if (usuario.getLastName() != null)
-			uDb.setLastName(usuario.getLastName());
-		if (usuario.getPhone() != null)
-			uDb.setPhone(usuario.getPhone());
-		if (usuario.getEconomicActivity() != null)
-			uDb.setEconomicActivity(usuario.getEconomicActivity());
-		if (usuario.getEconomicData() != null)
-			uDb.setEconomicData(usuario.getEconomicData());
+		if(usuario.getCedula() != null) uDb.setCedula(usuario.getCedula());
+		if (usuario.getName() != null) uDb.setName(usuario.getName());
+		if (usuario.getLastName() != null) uDb.setLastName(usuario.getLastName());
+		if (usuario.getPhone() != null)	uDb.setPhone(usuario.getPhone());
+		if (usuario.getEconomicActivity() != null)	uDb.setEconomicActivity(usuario.getEconomicActivity());
+		if (usuario.getEconomicData() != null) uDb.setEconomicData(usuario.getEconomicData());
 		if (usuario.getInterests() != null) {
 			uDb.setInterests(usuario.getInterests());
 			if (cbFactory.create("usuario").run(
@@ -70,17 +57,7 @@ public class UsuarioService implements IUsuarioService {
 				logger.info("Edicion Notificaciones Correcta");
 			}
 		}
-		if (usuario.getStakeHolders() != null)
-			uDb.setStakeHolders(usuario.getStakeHolders());
-		if (usuario.getLocation() != null) {
-			uDb.setLocation(new ArrayList<Double>(Arrays.asList(
-					(new BigDecimal(usuario.getLocation().get(0)).setScale(5, RoundingMode.HALF_UP)).doubleValue(),
-					(new BigDecimal(usuario.getLocation().get(1)).setScale(5, RoundingMode.HALF_UP).doubleValue()))));
-			if (cbFactory.create("usuario").run(
-					() -> rmdClient.editarUbicacion(usuario.getUsername(), uDb.getLocation()), e -> errorConexion(e))) {
-				logger.info("Edicion Registro Correcta");
-			}
-		}
+		if (usuario.getStakeHolders() != null) uDb.setStakeHolders(usuario.getStakeHolders());
 		return uDb;
 	}
 

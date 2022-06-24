@@ -27,5 +27,7 @@ public interface RecomendacionesFeignClient {
 	@PutMapping("/estadistica/usuario/editar/{username}")
 	public Boolean editUser(@PathVariable("username") String username, @RequestParam("newUsername") String newUsername,
 			@RequestParam("listaInterests") List<String> listaInterests);
-
+	
+	@DeleteMapping("/recomendaciones/eliminar/all/usuarios/")
+	public Boolean eliminarAllUsuario();
 }

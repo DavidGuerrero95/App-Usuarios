@@ -24,5 +24,8 @@ public interface AuthFeignClient {
 	@PutMapping("/autenticacion/editar")
 	public Boolean editarUsuarioAuth(@RequestParam String username, @RequestParam String uEdit,
 			@RequestParam String newPassword, @RequestParam List<Roles> roles);
+	
+	@DeleteMapping("/autenticacion/eliminar/all/usuarios/")
+	public Boolean eliminarAllUsuario();
 
 }
