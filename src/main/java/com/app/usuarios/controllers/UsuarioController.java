@@ -9,11 +9,8 @@ import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Base64;
-import java.util.Date;
 import java.util.List;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.cloud.client.circuitbreaker.CircuitBreakerFactory;
 import org.springframework.http.HttpStatus;
@@ -29,14 +26,13 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.web.server.ResponseStatusException;
 
-import com.app.usuarios.clients.AuthFeignClient;
+import com.app.usuarios.clients.BusquedaFeignClient;
 import com.app.usuarios.clients.EstadisticaFeignClient;
 import com.app.usuarios.clients.InterventorFeignClient;
 import com.app.usuarios.clients.NotificacionesFeignClient;
 import com.app.usuarios.clients.RecomendacionesFeignClient;
-import com.app.usuarios.clients.RegistroFeignClient;
-import com.app.usuarios.models.Registro;
 import com.app.usuarios.models.Roles;
 import com.app.usuarios.models.Usuario;
 import com.app.usuarios.models.UsuarioFiles;
@@ -46,10 +42,11 @@ import com.app.usuarios.repository.UsuarioPwRepository;
 import com.app.usuarios.repository.UsuarioRepository;
 import com.app.usuarios.services.IUsuarioService;
 
-@RestController
-public class UsuarioController {
+import lombok.extern.slf4j.Slf4j;
 
-	private final Logger logger = LoggerFactory.getLogger(UsuarioController.class);
+@RestController
+@Slf4j
+public class UsuarioController {
 
 	@SuppressWarnings("rawtypes")
 	@Autowired
@@ -68,12 +65,6 @@ public class UsuarioController {
 	IUsuarioService uService;
 
 	@Autowired
-	AuthFeignClient aClient;
-
-	@Autowired
-	RegistroFeignClient rClient;
-
-	@Autowired
 	InterventorFeignClient iClient;
 
 	@Autowired
@@ -85,58 +76,52 @@ public class UsuarioController {
 	@Autowired
 	EstadisticaFeignClient eClient;
 
-	// Listar todos los usuarios
+	@Autowired
+	BusquedaFeignClient bClient;
+
+//  ****************************	USUARIOS 	***********************************  //
+
+	// LISTAS USUARIOS
 	@GetMapping("/users/listar/")
-	@ResponseStatus(code = HttpStatus.CREATED)
+	@ResponseStatus(code = HttpStatus.OK)
 	public List<Usuario> listarUsuarios() throws IOException {
 		try {
 			return uRepository.findAll();
 		} catch (Exception e) {
-			throw new IOException("Error en lista " + e.getMessage());
+			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Error en listar usuarios: " + e.getMessage());
 		}
 	}
 
-	// Listar todos los usuarios
+	// LISTAR DATOS SENSIBLES USUARIO
 	@GetMapping("/users/listarPw/")
-	@ResponseStatus(code = HttpStatus.CREATED)
 	public List<UsuarioPw> listarUsuariosPw() throws IOException {
 		try {
 			return upRepository.findAll();
 		} catch (Exception e) {
-			throw new IOException("Error listaPw, usuarios: " + e.getMessage());
+			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Error en listar usuarios pw: " + e.getMessage());
 		}
-
 	}
 
-	// Retorna usuario
+	// VER USUARIO
 	@GetMapping("/users/findUsername/{username}")
 	@ResponseStatus(HttpStatus.OK)
 	public Usuario findUserByUsername(@PathVariable("username") String username) throws IOException {
 		if (existsByUsername(username)) {
 			return uRepository.findByUsername(username);
 		}
-		throw new IOException("Usuario: " + username + " no existe!");
+		throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Usuario " + username + " no existe");
 	}
 
-	// Retorna usuarioPw
-	@GetMapping("/users/findUsernamePw/{username}")
-	@ResponseStatus(HttpStatus.OK)
-	public UsuarioPw findUserByUsernamePw(@PathVariable("username") String username) throws IOException {
-		if (existsByUsername(username)) {
-			return upRepository.findByUsername(username);
-		}
-		throw new IOException("Usuario: " + username + " no existe!");
-	}
-
-	// Buscar Usuario por username, email o cellphone
+	// BUSCAR USUARIO POR USERNAME, EMAIL O CELULAR
 	@GetMapping("/users/encontrarUsuario/{usuario}")
 	@ResponseStatus(HttpStatus.OK)
 	public Usuario findByUsernameOrEmailOrPhone(@PathVariable("usuario") String usuario) {
 		return uRepository.findByUsernameOrEmailOrCellPhone(usuario, usuario, usuario);
 	}
 
-	// Retorna roles de usuario
+	// VER ROLE DEL USUARIO
 	@GetMapping("/users/verRoleUsuario/{username}")
+	@ResponseStatus(HttpStatus.OK)
 	public List<String> verRoleDeUsuario(@PathVariable("username") String username) throws IOException {
 		if (existsByUsername(username)) {
 			UsuarioPw usuario = upRepository.findByUsername(username);
@@ -147,81 +132,81 @@ public class UsuarioController {
 			}
 			return rolesList;
 		}
-		throw new IOException("Usuario: " + username + " no existe!");
+		throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Usuario " + username + " no existe");
 	}
 
-	// Ver username de un usuario
+	// VER USERNAME DE USUARIO
 	@GetMapping("/users/verUsuario/{username}")
 	@ResponseStatus(code = HttpStatus.OK)
 	public String verUsername(@PathVariable("username") String username) {
 		if (usuarioExists(username)) {
 			Usuario usuario = uRepository.findByUsernameOrEmailOrCellPhone(username, username, username);
 			return usuario.getUsername();
-		} else {
-			return "Usuario no encontrado: " + username;
 		}
+		throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Usuario " + username + " no existe");
 	}
 
-	// Crear usuario basado en registro
+	// MICROSERVICIO REGISTRO -> CREAR USUARIO
 	@PostMapping("/users/crearRegistro/")
-	@ResponseStatus(HttpStatus.CREATED)
 	public Boolean crearUsuarios(@RequestBody Usuario u, @RequestParam String password,
-			@RequestParam List<String> roles) throws IOException {
-		try {
-			List<Roles> listaRoles = uService.obtenerRoles(roles);
-			UsuarioPw usuarioPw = new UsuarioPw(u.getUsername(), password, true, 0, 0, listaRoles);
-			UsuarioFiles uf = uService.crearUf(u.getUsername());
-			uRepository.save(u);
-			upRepository.save(usuarioPw);
-			ufRepository.save(uf);
-			if (cbFactory.create("usuario").run(() -> aClient.crearUsuario(usuarioPw), e -> errorConexion(e))) {
-				logger.info("Creacion Correcta");
-			}
-			if (cbFactory.create("usuario").run(
-					() -> rmdClient.crearRecomendacion(u.getUsername(), u.getInterests(), u.getLocation()),
-					e -> errorConexion(e))) {
-				logger.info("Creacion Recomendacion Correcta");
-			}
+			@RequestParam List<String> roles) throws IOException, ResponseStatusException {
+
+		List<Roles> listaRoles = uService.obtenerRoles(roles);
+		UsuarioPw usuarioPw = new UsuarioPw(u.getUsername(), password, true, 0, 0, listaRoles);
+		UsuarioFiles uf = uService.crearUf(u.getUsername());
+
+		if (cbFactory.create("usuario").run(
+				() -> rmdClient.crearRecomendacion(u.getUsername(), u.getInterests(), u.getLocation()),
+				e -> errorCreacionRecomendacion(e))) {
+			log.info("Creacion Recomendacion Correcta");
 			if (cbFactory.create("usuario").run(() -> nClient.crearNotificaciones(u.getUsername(), u.getEmail()),
-					e -> errorConexion(e))) {
-				logger.info("Creacion Notificacion Correcta");
+					e -> errorCreacionNotificaciones(e))) {
+				log.info("Creacion Notificacion Correcta");
+				if (cbFactory.create("usuario").run(() -> eClient.crearUsuarioNotificaciones(u.getUsername()),
+						e -> errorCreacionEstadisticas(e))) {
+					log.info("Creacion Notificacion Correcta");
+					uRepository.save(u);
+					upRepository.save(usuarioPw);
+					ufRepository.save(uf);
+					return true;
+				} else {
+					rmdClient.eliminarRecomendacion(u.getUsername());
+					nClient.eliminarNotificacion(u.getUsername());
+					throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Error en la creacion");
+				}
+			} else {
+				rmdClient.eliminarRecomendacion(u.getUsername());
+				throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Error en la creacion");
 			}
-			if (cbFactory.create("usuario").run(() -> eClient.crearUsuarioNotificaciones(u.getUsername()),
-					e -> errorConexion(e))) {
-				logger.info("Creacion Notificacion Correcta");
-			}
-			return true;
-		} catch (Exception e) {
-			throw new IOException("Error en la creacion");
 		}
+		throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Error en la creacion");
 	}
 
-	// Peticion para eliminar un usuario
+	// PETICION A INTERVENTOR PARA ELIMINAR USUARIO
 	@PutMapping("/users/eliminarAdmin/{username}")
 	@ResponseStatus(code = HttpStatus.OK)
 	public void eliminarAdmin(@PathVariable("username") String username) {
 		if (existsByUsername(username)) {
 			if (cbFactory.create("usuario").run(() -> iClient.peticionEliminarUsuarios(username),
 					e -> errorConexion(e))) {
-				logger.info("Peticion de eliminacion enviada");
+				log.info("Peticion de eliminacion enviada");
 			}
 		}
 	}
-	
-	// Peticion para eliminar un usuario
+
+	// BORRAR PETICION PARA ELIMINAR USUARIO
 	@PutMapping("/users/eliminarPeticionAdmin/{username}")
 	@ResponseStatus(code = HttpStatus.OK)
 	public void eliminarPeticionUsuario(@PathVariable("username") String username) {
 		if (existsByUsername(username)) {
 			if (cbFactory.create("usuario").run(() -> iClient.eliminarPeticionUsuarios(username),
 					e -> errorConexion(e))) {
-				logger.info("Eliminacion de peticion lista");
+				log.info("Eliminacion de peticion lista");
 			}
 		}
 	}
-	
 
-	// Eliminar un usuario
+	// ELIMINAR USUARIO
 	@DeleteMapping("/users/eliminar/{username}")
 	@ResponseStatus(code = HttpStatus.ACCEPTED)
 	public Boolean eliminarUsuario(@PathVariable("username") String username) throws IOException {
@@ -232,30 +217,29 @@ public class UsuarioController {
 			uRepository.delete(uDelete);
 			ufRepository.delete(ufDelete);
 			upRepository.delete(upDelete);
-			if (cbFactory.create("usuario").run(() -> aClient.eliminarUsuario(upDelete), e -> errorConexion(e))) {
-				logger.info("Eliminacion Autenticacion Correcta");
-			}
-			if (cbFactory.create("usuario").run(() -> rClient.eliminarUsuario(upDelete), e -> errorConexion(e))) {
-				logger.info("Eliminacion Registro Correcta");
-			}
+
 			if (cbFactory.create("usuario").run(() -> rmdClient.eliminarRecomendacion(upDelete.getUsername()),
 					e -> errorConexion(e))) {
-				logger.info("Eliminacion Recomendacion Correcta");
+				log.info("Eliminacion Recomendacion Correcta");
+			}
+			if (cbFactory.create("usuario").run(() -> bClient.eliminarBusquedasUsername(upDelete.getUsername()),
+					e -> errorConexion(e))) {
+				log.info("Eliminacion Recomendacion Correcta");
 			}
 			if (cbFactory.create("usuario").run(() -> nClient.eliminarNotificacion(upDelete.getUsername()),
 					e -> errorConexion(e))) {
-				logger.info("Eliminacion Notificacion Correcta");
+				log.info("Eliminacion Notificacion Correcta");
 			}
 			if (cbFactory.create("usuario").run(() -> eClient.borrarEstadisticasUsuario(upDelete.getUsername()),
 					e -> errorConexion(e))) {
-				logger.info("Eliminacion Estadistica Correcta");
+				log.info("Eliminacion Estadistica Correcta");
 			}
 			return true;
 		}
 		return false;
 	}
 
-	// Enviar codigo para verificar edicion
+	// ENVIAR CODIGO PARA LA VERIFICACION DE CAMBIOS
 	@PutMapping("/users/enviarCodigo/{username}")
 	@ResponseStatus(code = HttpStatus.OK)
 	public void enviarCodigo(@PathVariable("username") String username) {
@@ -266,9 +250,10 @@ public class UsuarioController {
 			upRepository.save(usuario);
 			nClient.enviarCodigoEditUsuario(username, codigo);
 		}
+		throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Usuario " + username + " no existe");
 	}
 
-	// Verificar codigo
+	// VERIFICAR CODIGO
 	@GetMapping("/users/verificarCodigo/{username}")
 	@ResponseStatus(code = HttpStatus.OK)
 	public Boolean verificarEdicion(@PathVariable("username") String username,
@@ -283,10 +268,10 @@ public class UsuarioController {
 				return false;
 			}
 		}
-		throw new IOException("Usuario no existe");
+		throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Usuario " + username + " no existe");
 	}
 
-	// Editar un usuario
+	// EDITAR USUARIO
 	@PutMapping("/users/editar/{username}")
 	@ResponseStatus(HttpStatus.OK)
 	public ResponseEntity<?> editarUsuario(@PathVariable("username") String username, @RequestBody Usuario usuario) {
@@ -297,16 +282,16 @@ public class UsuarioController {
 				uRepository.save(uDb);
 				return ResponseEntity.ok("Edicion Exitosa");
 			} catch (Exception e) {
-				return ResponseEntity.badRequest().body("Error en la edicion" + e.getMessage());
+				throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Error en la edicion");
 			}
 		}
-		return ResponseEntity.badRequest().body("Usuario no existe");
+		throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Usuario " + username + " no existe");
 	}
 
-	// Editar Username
+	// EDITAR USERNAME
 	@PutMapping("/users/editarUsername/{username}")
 	@ResponseStatus(HttpStatus.OK)
-	public ResponseEntity<?> editarUsuarioUsername(@PathVariable("username") String username,
+	public Boolean editarUsuarioUsername(@PathVariable("username") String username,
 			@RequestParam("nuevoUsername") String nuevoUsername) {
 		if (existsByUsername(username) && !existsByUsername(nuevoUsername)) {
 			Usuario uDb = uRepository.findByUsername(username);
@@ -315,93 +300,80 @@ public class UsuarioController {
 			uDb.setUsername(nuevoUsername);
 			uPwDb.setUsername(nuevoUsername);
 			uFilesDb.setUsername(nuevoUsername);
-			try {
-				uRepository.save(uDb);
-				upRepository.save(uPwDb);
-				ufRepository.save(uFilesDb);
-				if (cbFactory.create("usuario").run(
-						() -> aClient.editarUsuarioAuth(username, nuevoUsername, "", new ArrayList<Roles>()),
-						e -> errorConexion(e))) {
-					logger.info("Edicion Autenticacion Correcta");
-				}
-				if (cbFactory.create("usuario").run(() -> rClient.editarUsuarioRegistro(username, nuevoUsername, "", "",
-						"", new ArrayList<Roles>()), e -> errorConexion(e))) {
-					logger.info("Edicion Registro Correcta");
-				}
-				if (cbFactory.create("usuario").run(() -> nClient.editUser(username, nuevoUsername, ""),
-						e -> errorConexion(e))) {
-					logger.info("Edicion Notificaciones Correcta");
-				}
+
+			if (cbFactory.create("usuario").run(() -> nClient.editUser(username, nuevoUsername, ""),
+					e -> errorConexion(e))) {
+				log.info("Edicion Notificaciones Correcta");
 				if (cbFactory.create("usuario").run(() -> eClient.editUser(username, nuevoUsername),
 						e -> errorConexion(e))) {
-					logger.info("Edicion Notificaciones Correcta");
+					log.info("Edicion Notificaciones Correcta");
+					if (cbFactory.create("usuario").run(
+							() -> rmdClient.editUser(username, nuevoUsername, new ArrayList<String>()),
+							e -> errorConexion(e))) {
+						log.info("Edicion Notificaciones Correcta");
+						uRepository.save(uDb);
+						upRepository.save(uPwDb);
+						ufRepository.save(uFilesDb);
+						return true;
+					} else {
+						nClient.editUser(nuevoUsername, username, "");
+						eClient.editUser(nuevoUsername, username);
+						throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Usuario " + username + " no existe");
+					}
+				} else {
+					nClient.editUser(nuevoUsername, username, "");
+					throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Usuario " + username + " no existe");
 				}
-				if (cbFactory.create("usuario").run(
-						() -> rmdClient.editUser(username, nuevoUsername, new ArrayList<String>()),
-						e -> errorConexion(e))) {
-					logger.info("Edicion Notificaciones Correcta");
-				}
-				return ResponseEntity.badRequest().body("Username cambiado correctamente");
-			} catch (Exception e) {
-				return ResponseEntity.badRequest().body("Error en la edicion" + e.getMessage());
 			}
+			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Error en la edicion");
 		}
-		return ResponseEntity.badRequest().body("Usuario no existe");
+		throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Usuario " + username + " no existe");
 	}
 
-	// Editar Celular
+	// EDITAR CELULAR
 	@PutMapping("/users/editarCellPhone/{username}")
 	@ResponseStatus(HttpStatus.OK)
-	public ResponseEntity<?> editarUsuarioCellPhone(@PathVariable("username") String username,
+	public Boolean editarUsuarioCellPhone(@PathVariable("username") String username,
 			@RequestParam("nuevoCellPhone") String nuevoCellPhone) {
 		if (existsByUsername(username) && !existsByCellPhone(nuevoCellPhone)) {
 			Usuario uDb = uRepository.findByUsername(username);
 			uDb.setCellPhone(nuevoCellPhone);
 			try {
 				uRepository.save(uDb);
-				if (cbFactory.create("usuario").run(() -> rClient.editarUsuarioRegistro(username, "", nuevoCellPhone,
-						"", "", new ArrayList<Roles>()), e -> errorConexion(e))) {
-					logger.info("Edicion Registro Correcta");
-				}
-				return ResponseEntity.badRequest().body("Celular cambiado correctamente");
+				return true;
 			} catch (Exception e) {
-				return ResponseEntity.badRequest().body("Error en la edicion" + e.getMessage());
+				throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Error en la edicion");
 			}
 		}
-		return ResponseEntity.badRequest().body("Usuario no existe");
+		throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Usuario " + username + " no existe");
 	}
 
-	// Editar Email
+	// EDITAR EMAIL
 	@PutMapping("/users/editarEmail/{username}")
 	@ResponseStatus(HttpStatus.OK)
-	public ResponseEntity<?> editarUsuarioEmail(@PathVariable("username") String username,
+	public Boolean editarUsuarioEmail(@PathVariable("username") String username,
 			@RequestParam("nuevoEmail") String nuevoEmail) {
 		if (existsByUsername(username) && !existsByCellPhone(nuevoEmail)) {
 			Usuario uDb = uRepository.findByUsername(username);
 			uDb.setCellPhone(nuevoEmail);
 			try {
-				uRepository.save(uDb);
-				if (cbFactory.create("usuario").run(
-						() -> rClient.editarUsuarioRegistro(username, "", "", nuevoEmail, "", new ArrayList<Roles>()),
-						e -> errorConexion(e))) {
-					logger.info("Edicion Registro Correcta");
-				}
 				if (cbFactory.create("usuario").run(() -> nClient.editUser(username, "", nuevoEmail),
 						e -> errorConexion(e))) {
-					logger.info("Edicion Notificaciones Correcta");
+					log.info("Edicion Notificaciones Correcta");
+					uRepository.save(uDb);
 				}
-				return ResponseEntity.badRequest().body("Email cambiado correctamente");
+				return true;
 			} catch (Exception e) {
-				return ResponseEntity.badRequest().body("Error en la edicion" + e.getMessage());
+				throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Error en la edicion");
 			}
 		}
-		return ResponseEntity.badRequest().body("Usuario no existe");
+		throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Usuario " + username + " no existe");
 	}
 
-	// Editar ubicacion de usuario
+	// EDITAR UBICACION DE USUARIO
 	@PutMapping("/users/editarUbicacion/{username}")
 	@ResponseStatus(HttpStatus.OK)
-	public ResponseEntity<?> eUbicacion(@PathVariable("username") String username,
+	public Boolean eUbicacion(@PathVariable("username") String username,
 			@RequestParam(value = "location") List<Double> usuarioLocation) {
 		if (existsByUsername(username)) {
 			try {
@@ -409,24 +381,23 @@ public class UsuarioController {
 				uDb.setLocation(new ArrayList<Double>(Arrays.asList(
 						(new BigDecimal(usuarioLocation.get(0)).setScale(5, RoundingMode.HALF_UP)).doubleValue(),
 						(new BigDecimal(usuarioLocation.get(1)).setScale(5, RoundingMode.HALF_UP).doubleValue()))));
-				uRepository.save(uDb);
 				if (cbFactory.create("usuario").run(() -> rmdClient.editarUbicacion(username, uDb.getLocation()),
 						e -> errorConexion(e))) {
-					logger.info("Edicion Registro Correcta");
+					log.info("Edicion Registro Correcta");
+					uRepository.save(uDb);
 				}
-				return ResponseEntity.ok("Ubicacion actulizada");
+				return true;
 			} catch (Exception e) {
-				return ResponseEntity.badRequest()
-						.body("Error en la edicion:" + e.getMessage() + "E -->" + e.getLocalizedMessage());
+				throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Error en la edicion");
 			}
 		}
-		return ResponseEntity.badRequest().body("Usuario: " + username + " No existe");
+		throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Usuario " + username + " no existe");
 	}
 
-	// Editar Contraseña
+	// EDITAR CONTRASEÑA
 	@PutMapping("/users/editarContrasena/{username}")
 	@ResponseStatus(HttpStatus.OK)
-	public ResponseEntity<?> eContrasena(@PathVariable("username") String username,
+	public Boolean eContrasena(@PathVariable("username") String username,
 			@RequestParam(value = "password") String password) {
 		if (existsByUsername(username)) {
 			try {
@@ -434,29 +405,18 @@ public class UsuarioController {
 				String newPassword = uService.codificar(password);
 				uDb.setPassword(newPassword);
 				upRepository.save(uDb);
-				if (cbFactory.create("usuario").run(
-						() -> aClient.editarUsuarioAuth(username, "", newPassword, new ArrayList<Roles>()),
-						e -> errorConexion(e))) {
-					logger.info("Edicion Contrasena Autenticacion Correcta");
-				}
-				if (cbFactory.create("usuario").run(
-						() -> rClient.editarUsuarioRegistro(username, "", "", "", newPassword, new ArrayList<Roles>()),
-						e -> errorConexion(e))) {
-					logger.info("Edicion Contrasena Registro Correcta");
-				}
-				return ResponseEntity.ok("Contrasena actulizada");
+				return true;
 			} catch (Exception e) {
-				return ResponseEntity.badRequest()
-						.body("Error en la edicion:" + e.getMessage() + "E -->" + e.getLocalizedMessage());
+				throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Error en la edicion");
 			}
 		}
-		return ResponseEntity.badRequest().body("Usuario: " + username + " No existe");
+		throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Usuario " + username + " no existe");
 	}
 
-	// Asignar role Moderador
+	// ASIGNAR ROLE MODERATOR
 	@PutMapping("/users/roleModerator/{username}")
 	@ResponseStatus(code = HttpStatus.OK)
-	public ResponseEntity<?> asignarModerator(@PathVariable("username") String username) {
+	public Boolean asignarModerator(@PathVariable("username") String username) {
 		if (existsByUsername(username)) {
 			UsuarioPw usuario = upRepository.findByUsername(username);
 			Roles userRole1 = new Roles("2", "ROLE_MODERATOR");
@@ -465,24 +425,17 @@ public class UsuarioController {
 				roles.add(userRole1);
 				usuario.setRoles(roles);
 				upRepository.save(usuario);
-				if (cbFactory.create("usuario").run(() -> aClient.editarUsuarioAuth(username, "", "", roles),
-						e -> errorConexion(e))) {
-					logger.info("Edicion roles Autenticacion Correcta");
-				}
-				if (cbFactory.create("usuario").run(
-						() -> rClient.editarUsuarioRegistro(username, "", "", "", "", roles), e -> errorConexion(e))) {
-					logger.info("Edicion roles Registro Correcta");
-				}
-				return ResponseEntity.ok("Role Moderator asignado");
+				return true;
 			} else {
-				return ResponseEntity.badRequest().body("Usuario: " + username + " ya tiene Role Moderator");
+				throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+						"Usuario: " + username + " ya tiene Role Moderator");
 			}
 		} else {
-			return ResponseEntity.badRequest().body("Usuario: " + username + " No existe");
+			throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Usuario " + username + " no existe");
 		}
 	}
 
-	// Asignar role Admin
+	// ASIGNAR ROLE ADMIN
 	@PutMapping("/users/roleAdmin/{username}")
 	@ResponseStatus(code = HttpStatus.OK)
 	public ResponseEntity<?> asignarAdmin(@PathVariable("username") String username) {
@@ -494,24 +447,16 @@ public class UsuarioController {
 				roles.add(userRole1);
 				usuario.setRoles(roles);
 				upRepository.save(usuario);
-				if (cbFactory.create("usuario").run(() -> aClient.editarUsuarioAuth(username, "", "", roles),
-						e -> errorConexion(e))) {
-					logger.info("Edicion roles Autenticacion Correcta");
-				}
-				if (cbFactory.create("usuario").run(
-						() -> rClient.editarUsuarioRegistro(username, "", "", "", "", roles), e -> errorConexion(e))) {
-					logger.info("Edicion Contrasena Registro Correcta");
-				}
 				return ResponseEntity.ok("Role Admin asignado");
 			} else {
-				return ResponseEntity.badRequest().body("Usuario: " + username + " ya tiene Role Admin");
+				throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+						"Usuario: " + username + " ya tiene Role Admin");
 			}
-		} else {
-			return ResponseEntity.badRequest().body("Usuario: " + username + " No existe");
 		}
+		throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Usuario " + username + " no existe");
 	}
 
-	// Cambiar imagen
+	// CAMBIAR IMAGEN
 	@PutMapping("/users/file/uploadImage/{username}")
 	@ResponseStatus(HttpStatus.OK)
 	public ResponseEntity<?> uploadImage(@PathVariable("username") String username,
@@ -520,11 +465,11 @@ public class UsuarioController {
 			UsuarioFiles uploadFile = uService.ponerImagen(username, file);
 			ufRepository.save(uploadFile);
 			return ResponseEntity.ok("Imagen añadida");
-		} else {
-			return ResponseEntity.badRequest().body("Error: " + username + " no existe");
 		}
+		throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Usuario " + username + " no existe");
 	}
 
+	// IMAGEN A BINARIO
 	@GetMapping("/users/file/binary/{username}")
 	@ResponseStatus(HttpStatus.OK)
 	public String binaryToStringFile(@PathVariable("username") String username) {
@@ -537,10 +482,10 @@ public class UsuarioController {
 			}
 			return Base64.getEncoder().encodeToString(data);
 		}
-		return "Usuario no encontrado";
+		throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Usuario " + username + " no existe");
 	}
 
-	// Descargar imagen
+	// DESCARGAR IMAGEN
 	@GetMapping(value = "/users/file/downloadImage/{username}", produces = { MediaType.IMAGE_JPEG_VALUE,
 			MediaType.IMAGE_PNG_VALUE })
 	@ResponseStatus(HttpStatus.OK)
@@ -554,14 +499,14 @@ public class UsuarioController {
 		return data;
 	}
 
-	// Preguntar si usuario existe por username
+	// PREGUNTAR SI UN USUARIO EXISTE
 	@GetMapping("/users/existUsuario/{username}")
 	@ResponseStatus(HttpStatus.FOUND)
 	public Boolean usuarioExists(@PathVariable("username") String username) {
 		return uRepository.existsByUsernameOrEmailOrCellPhone(username, username, username);
 	}
 
-	// Preguntar si usuario existe por los 3 metodos
+	// PREGUNTAR SI UN USUARIO EXISTE: EMAIL, CORREO, USERNAME
 	@GetMapping("/users/usuarioExisteDatos/")
 	@ResponseStatus(HttpStatus.FOUND)
 	public Boolean preguntarUsuarioExiste(@RequestParam(value = "username") String username,
@@ -570,34 +515,35 @@ public class UsuarioController {
 		return uRepository.existsByUsernameOrEmailOrCellPhone(username, email, cellPhone);
 	}
 
-	// Preguntar si usuario existe por username
+	// PREGUNTAR SI UN USUARIO EXISTE USERNAME
 	@GetMapping("/users/existUsername/{username}")
 	@ResponseStatus(HttpStatus.FOUND)
 	public Boolean existsByUsername(@PathVariable("username") String username) {
 		return uRepository.existsByUsername(username);
 	}
 
-	// Preguntar si usuario existe por email
+	// PREGUNTAR SI UN USUARIO EXISTE POR EMAIL
 	@GetMapping("/users/existEmail/{email}")
 	@ResponseStatus(HttpStatus.FOUND)
 	public Boolean existsByEmail(@PathVariable("email") String email) {
 		return uRepository.existsByEmail(email);
 	}
 
-	// Preguntar si usuario existe por email
+	// PREGUNTAR SI UN USUARIO EXISTE POR CELULAR
 	@GetMapping("/users/existCellPhone/{cellPhone}")
 	@ResponseStatus(HttpStatus.FOUND)
 	public Boolean existsByCellPhone(@PathVariable("cellPhone") String cellPhone) {
 		return uRepository.existsByCellPhone(cellPhone);
 	}
 
+	// PREGUNTAR SI UN USUARIO EXISTE POR CEDULA
 	@GetMapping("/users/existCedula/{cedula}")
 	@ResponseStatus(HttpStatus.FOUND)
 	public Boolean existsByCedula(@PathVariable("cedula") String cedula) {
 		return uRepository.existsByCedula(cedula);
 	}
 
-	// Obtener edad
+	// OBTENER EDAD
 	@GetMapping("/users/obtenerEdad/{username}")
 	public ResponseEntity<?> edadUsurio(@PathVariable("username") String username) {
 		if (existsByUsername(username)) {
@@ -608,13 +554,13 @@ public class UsuarioController {
 			Period periodo = Period.between(fechaNac, ahora);
 			return ResponseEntity.ok(periodo.getYears());
 		}
-		return ResponseEntity.badRequest().body("Usuario No existe");
+		throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Usuario " + username + " no existe");
 	}
 
-	// Crear Usuario Cero
+	// CREAR PRIMER USUARIO
 	@PostMapping("/users/crearUsuarioMod/")
 	@ResponseStatus(HttpStatus.CREATED)
-	public ResponseEntity<?> nuevoUsuarioMod(@RequestParam("username") String username,
+	public Boolean nuevoUsuarioMod(@RequestParam("username") String username,
 			@RequestParam("cellPhone") String cellPhone, @RequestParam("email") String email,
 			@RequestParam("cedula") String cedula, @RequestParam("name") String name,
 			@RequestParam("lastName") String lastName, @RequestParam("birthDate") String birthDate,
@@ -629,31 +575,38 @@ public class UsuarioController {
 					economicActivity, economicData, interests, location, headFamily, stakeHolders);
 			UsuarioPw uPw = uService.usuarioPasword(usuario.getUsername(), password);
 			UsuarioFiles uploadFile = uService.ponerImagen(usuario.getUsername(), file);
-			uRepository.save(usuario);
-			upRepository.save(uPw);
-			ufRepository.save(uploadFile);
-			if (cbFactory.create("usuario").run(() -> aClient.crearUsuario(uPw), e -> errorConexion(e))) {
-				logger.info("Creacion Autenticacion Correcta");
-			}
+
 			if (cbFactory.create("usuario").run(() -> rmdClient.crearRecomendacion(usuario.getUsername(),
-					usuario.getInterests(), usuario.getLocation()), e -> errorConexion(e))) {
-				logger.info("Creacion Recomendacion Correcta");
+					usuario.getInterests(), usuario.getLocation()), e -> errorCreacionRecomendacion(e))) {
+				log.info("Creacion Recomendacion Correcta");
+				if (cbFactory.create("usuario").run(
+						() -> nClient.crearNotificaciones(usuario.getUsername(), usuario.getEmail()),
+						e -> errorCreacionNotificaciones(e))) {
+					log.info("Creacion Notificacion Correcta");
+					if (cbFactory.create("usuario").run(() -> eClient.crearUsuarioNotificaciones(usuario.getUsername()),
+							e -> errorCreacionEstadisticas(e))) {
+						log.info("Creacion Notificacion Correcta");
+						uRepository.save(usuario);
+						upRepository.save(uPw);
+						ufRepository.save(uploadFile);
+						return true;
+					} else {
+						rmdClient.eliminarRecomendacion(usuario.getUsername());
+						nClient.eliminarNotificacion(usuario.getUsername());
+						throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Error en la creacion");
+					}
+				} else {
+					rmdClient.eliminarRecomendacion(usuario.getUsername());
+					throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Error en la creacion");
+				}
 			}
-			if (cbFactory.create("usuario").run(
-					() -> nClient.crearNotificaciones(usuario.getUsername(), usuario.getEmail()),
-					e -> errorConexion(e))) {
-				logger.info("Creacion Notificaciones Correcta");
-			}
-			if (cbFactory.create("usuario").run(() -> eClient.crearUsuarioNotificaciones(usuario.getUsername()),
-					e -> errorConexion(e))) {
-				logger.info("Creacion Estadistica Correcta");
-			}
-			return ResponseEntity.ok("Usuario Creado");
+			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Error en la creacion");
 		}
-		return ResponseEntity.badRequest().body("Usuario ya existe");
+		throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Usuario ya existe");
+
 	}
 
-	// Metodo para iniciar sesion
+	// INICIAR SESION
 	@GetMapping("/users/iniciarSesion/{username}")
 	public UsuarioPw autenticacion(@PathVariable String username) throws InterruptedException {
 		if (usuarioExists(username)) {
@@ -663,7 +616,7 @@ public class UsuarioController {
 		return null;
 	}
 
-	// Metodo para registro
+	// VERIFICAR REGISTRO
 	@GetMapping("/users/registroExistencia/")
 	public Boolean registroExistenciaUsuarios(@RequestParam(value = "username") String username,
 			@RequestParam(value = "email") String email, @RequestParam(value = "cellPhone") String cellPhone)
@@ -672,71 +625,58 @@ public class UsuarioController {
 		return bandera;
 	}
 
+	// CEDULA EXISTE
 	@GetMapping("/users/registroCedula/")
 	public Boolean registroCedula(@RequestParam(value = "cedula") String cedula) throws InterruptedException {
 		Boolean bandera = existsByCedula(cedula);
 		return bandera;
 	}
 
-	public Boolean errorConexion(Throwable e) {
-		logger.info(e.getMessage());
-		return false;
-	}
-	
-
 	@PutMapping("/users/arreglar/")
 	public String arreglarUsuarios() throws IOException {
-		List<Registro> lReg = cbFactory.create("usuario").run(() -> rClient.listar(), e -> errorArreglarReg(e));
-		if (lReg != null) {
-			if (lReg.size() != listarUsuarios().size()) {
-				List<String> uReg = new ArrayList<String>();
-				List<String> cReg = new ArrayList<String>();
-				List<String> usuarios = new ArrayList<String>();
-				lReg.forEach(l -> {
-					uReg.add(l.getUsername());
-					cReg.add(l.getCodigo());
-				});
 
-				listarUsuarios().forEach(l -> usuarios.add(l.getUsername()));
-				uReg.forEach(u -> {
-					if (!usuarios.contains(u)) {
-						rClient.editarUsuario(u, "123456", new Date().getTime());
-						rClient.crearUsuario(u, "123456");
-					}
-				});
-				return "ok";
-			}
-			return "sin errores";
-		}
 		return null;
 	}
 
-	private List<Registro> errorArreglarReg(Throwable e) {
-		logger.info(e.getMessage());
-		return null;
-	}
-	
+	// ELIMINAR TODOS LOS USUARIOS
 	@DeleteMapping("/users/eliminar/all/usuarios/")
 	@ResponseStatus(code = HttpStatus.ACCEPTED)
 	public void eliminarAllUsuarios() {
 		uRepository.deleteAll();
 		ufRepository.deleteAll();
 		upRepository.deleteAll();
-		if (cbFactory.create("usuario").run(() -> aClient.eliminarAllUsuario(), e -> errorConexion(e))) {
-			logger.info("Eliminacion Todos usuarios, Autenticacion Correcta");
-		}
-		if (cbFactory.create("usuario").run(() -> rClient.eliminarAllUsuario(), e -> errorConexion(e))) {
-			logger.info("Eliminacion Todos usuarios, Registro Correcta");
-		}
+
 		if (cbFactory.create("usuario").run(() -> rmdClient.eliminarAllUsuario(), e -> errorConexion(e))) {
-			logger.info("Eliminacion Todos usuarios, Recomendacion Correcta");
+			log.info("Eliminacion Todos usuarios, Recomendacion Correcta");
 		}
 		if (cbFactory.create("usuario").run(() -> nClient.eliminarAllUsuario(), e -> errorConexion(e))) {
-			logger.info("Eliminacion Todos usuarios, Notificacion Correcta");
+			log.info("Eliminacion Todos usuarios, Notificacion Correcta");
 		}
-		if (cbFactory.create("usuario").run(() -> eClient.eliminarAllUsuario(),
-				e -> errorConexion(e))) {
-			logger.info("Eliminacion Todos usuarios, Correcta");
+		if (cbFactory.create("usuario").run(() -> eClient.eliminarAllUsuario(), e -> errorConexion(e))) {
+			log.info("Eliminacion Todos usuarios, Correcta");
 		}
 	}
+
+//  ****************************	FUNCIONES TOLERANCIA A FALLOS	***********************************  //
+
+	public Boolean errorConexion(Throwable e) {
+		log.info(e.getMessage());
+		return false;
+	}
+
+	public Boolean errorCreacionRecomendacion(Throwable e) {
+		log.info(e.getMessage());
+		return false;
+	}
+
+	public Boolean errorCreacionNotificaciones(Throwable e) {
+		log.info(e.getMessage());
+		return false;
+	}
+
+	public Boolean errorCreacionEstadisticas(Throwable e) {
+		log.info(e.getMessage());
+		return false;
+	}
+
 }

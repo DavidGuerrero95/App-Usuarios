@@ -9,17 +9,17 @@ import org.springframework.web.bind.annotation.RequestParam;
 
 @FeignClient(name = "app-estadistica")
 public interface EstadisticaFeignClient {
-
-	@DeleteMapping("/estadistica/usuarios/borrarEstadisticas/")
-	public Boolean borrarEstadisticasUsuario(@RequestParam("username") String username);
 	
-	@PostMapping("/estadistica/usuarios/crear/")
+	@PostMapping("/estadisticas/usuarios/crear/")
 	public Boolean crearUsuarioNotificaciones(@RequestParam("username") String username);
 	
-	@PutMapping("/estadistica/usuarios/editar/{username}")
+	@PutMapping("/estadisticas/usuarios/editar/{username}")
 	public Boolean editUser(@PathVariable("username") String username, @RequestParam("newUsername") String newUsername);
+
+	@DeleteMapping("/estadisticas/usuarios/borrarEstadisticas/")
+	public Boolean borrarEstadisticasUsuario(@RequestParam("username") String username);
 	
-	@DeleteMapping("/estadistica/eliminar/all/usuarios/")
+	@DeleteMapping("/estadisticas/eliminar/all/usuarios/")
 	public Boolean eliminarAllUsuario();
 	
 }
